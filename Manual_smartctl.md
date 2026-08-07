@@ -1,4 +1,4 @@
-# Cheatsheet de smartctl
+# Guia básica de smartctl
 
 Herramienta principal de smartmontools para consultar y controlar el sistema S.M.A.R.T. de discos duros y SSDs.
 
@@ -143,3 +143,87 @@ sudo smartctl -a -d megaraid,0 /dev/sda | grep -Ei "power_on|reallocated|health|
 | `-d` | device | Tipo de dispositivo (ata, scsi, sat, megaraid,N) |
 | `-C` | Captive | Modo bloqueante para autotest |
 | `--scan` | — | Lista dispositivos detectados |
+
+
+
+# Guía Técnica Unidades ocultas
+
+Esta guía documenta el procedimiento para identificar, escanear y extraer la salud S.M.A.R.T. de discos **SATA, SAS y NVMe** en estado **UGOOD** (Unconfigured Good) u ocultos detrás de una controladora RAID por hardware LSI MegaRAID / Broadcom (ej. serie Tri-Mode SAS3508).
+
+---
+
+## 1. Identificación Inicial del Hardware
+Antes de ejecutar consultas de diagnóstico, es obligatorio identificar el modelo de la tarjeta y mapear los identificadores físicos de las unidades.
+
+### Paso A: Detectar la controladora RAID
+```bash
+lspci | grep -i -E "raid|storage"
+```
+*   `lspci`: Lista todos los dispositivos conectados a los buses PCI del servidor.
+*   `| grep -i -E "raid|storage"`: Filtra la salida para mostrar únicamente las controladoras de almacenamiento.
+
+### Paso B: Escanear el mapeo físico de unidades (SATA y SAS)
+```bash
+smartctl --scan-open
+```
+*   `smartctl`: Utilidad de control y monitoreo para sistemas de almacenamiento S.M.A.R.T.
+*   `--scan-open`: Examina los dispositivos del sistema y abre comunicación real con ellos. Fuerza a la controladora a revelar la ruta del bus (ej. `/dev/bus/15`) y el ID físico (ej. `25`) de los discos ocultos.
+
+---
+
+## 2. Comandos de Consulta S.M.A.R.T. según la Tecnología del Disco
+
+### Opción A: Discos SATA
+Cuando el escaneo devuelva un formato como `/dev/bus/15 -d sat+megaraid,25`, ejecuta:
+```bash
+smartctl -a -d sat+megaraid,25 /dev/bus/15
+```
+*   `-a`: Ordena volcar toda la información disponible (firmware, estado de salud y tabla de atributos).
+*   `-d sat+megaraid,25`: Define el tipo de dispositivo (`-d` / `--device`):
+    *   `sat`: (SCSI to ATA Translation) Traduce comandos SATA dentro del bus SCSI de la tarjeta. **Obligatorio para SATA**.
+    *   `+megaraid`: Cruza la capa propietaria de control de la tarjeta LSI MegaRAID.
+    *   `,25`: Especifica la ranura o ID físico exacto del disco en el backplane.
+*   `/dev/bus/15`: Nodo de entrada asignado por Linux para comunicarse con esa controladora específica.
+
+### Opción B: Discos SAS
+Los discos empresariales SAS no requieren traducción ATA. Si el disco detectado es SAS, utiliza:
+```bash
+smartctl -a -d megaraid,25 /dev/bus/15
+```
+*   `-d megaraid,25`: Accede de manera directa al disco SAS físico utilizando únicamente el protocolo nativo de la tarjeta MegaRAID en el ID físico `25`.
+
+### Opción C: Unidades SSD NVMe (Controladoras Tri-Mode)
+Las unidades NVMe bajo controladoras Tri-Mode no responden a `smartctl`. Se debe utilizar la herramienta oficial de Broadcom preinstalada en System Rescue:
+```bash
+storcli /c0 /eall /sall show all
+```
+*   `storcli`: Utilidad de línea de comandos para la gestión de hardware MegaRAID.
+*   `/c0`: Apunta a la primera controladora RAID del sistema (Controller 0).
+*   `/eall`: Consulta todos los gabinetes o backplanes conectados (Enclosure All).
+*   `/sall`: Consulta todas las bahías físicas de discos (Slot All).
+*   `show all`: Vuelca la telemetría interna, contadores de desgaste y estado de salud de la controladora.
+
+---
+
+## 3. Auditoría de Componentes Nuevos (Métricas Clave)
+Para validar si un disco entregado como "nuevo" es genuino y no remanufacturado o usado, audita los siguientes valores en los reportes generados:
+
+### En Discos SATA y SAS (Salida de `smartctl`)
+*   **ID 09 - Power_On_Hours (Raw Value):** Horas totales de encendido. En un disco nuevo debe marcar entre **`0` y `5` horas** (tiempo de pruebas de control de calidad en fábrica).
+*   **ID 12 - Power_Cycle_Count (Raw Value):** Número de veces que el disco se ha encendido/apagado. Debe ser muy bajo, idealmente entre **`1` y `5` ciclos**.
+*   **ID 241/242 - Total_LBAs_Written / Read:** Volumen de datos transferidos. Debe estar en **`0` o valores mínimos** de Megabytes generados por el fabricante.
+*   **Health Status (SMART overall-health):** Debe dictaminar estrictamente **`PASSED`**.
+
+### En Unidades NVMe (Salida de `storcli`)
+*   **Power On Hours:** Debe marcar de **`0` a `2` horas**.
+*   **Power Cycles:** Debe registrar un valor menor a **`5` ciclos**.
+*   **Percentage Used:** Muestra el desgaste consumido de la vida útil de las celdas flash. En una unidad nueva debe marcar estrictamente **`0%`**. Cualquier valor superior indica que fue usado previamente.
+*   **Media Error Count / Pred Fail Count:** Ambas métricas de error deben estar en **`0`**.
+
+---
+
+## 4. Atributos Críticos de Falla (SATA / SAS)
+Independientemente de la edad del disco, vigila siempre que estos contadores de degradación física se mantengan limpios:
+*   **ID 05 (Reallocated_Sector_Count):** Sectores dañados reemplazados. **Debe estar en 0**.
+*   **ID 197 (Current_Pending_Sector):** Sectores inestables en espera de reasignación. **Debe estar en 0**.
+

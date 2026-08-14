@@ -61,3 +61,76 @@ Ahora que dispones de la herramienta oficial, ejecuta el comando estándar para 
 ```powershell
 winget install -e --id Google.Chrome --accept-source-agreements --accept-package-agreements
 ```
+
+# Caso se instaló Winget pero no se agregó al path
+
+## Paso 1: Verificar información completa del script instalado
+
+Ejecuta el siguiente comando para obtener todos los detalles del script, incluyendo su ubicación:
+
+```powershell
+Get-InstalledScript -Name winget-install | Select-Object *
+```
+
+Si el campo de ruta no aparece claramente, continúa al siguiente paso.
+
+---
+
+## Paso 2: Localizar el script manualmente
+
+Como el `Install-Script` se ejecutó con permisos de administrador, es probable que se haya instalado en el scope **AllUsers**, cuya ruta por defecto es:
+
+```
+C:\Program Files\WindowsPowerShell\Scripts\winget-install.ps1
+```
+
+Puedes confirmarlo listando el contenido de la carpeta:
+
+```powershell
+dir "C:\Program Files\WindowsPowerShell\Scripts"
+```
+
+---
+
+## Paso 3: Ejecutar el script con la ruta completa
+
+Como esa carpeta no está en el `PATH` de tu sesión actual, ejecuta el script indicando la ruta completa:
+
+```powershell
+& "C:\Program Files\WindowsPowerShell\Scripts\winget-install.ps1" -Force
+```
+
+---
+
+## Paso 4: (Opcional) Agregar la carpeta al PATH del sistema
+
+Para que en el futuro puedas ejecutar `winget-install -Force` directamente sin especificar la ruta completa, agrega la carpeta al `PATH` de forma permanente (requiere permisos de administrador):
+
+```powershell
+[Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\Program Files\WindowsPowerShell\Scripts", "Machine")
+```
+
+Luego **cierra completamente la ventana de PowerShell** y ábrela de nuevo como administrador para que tome el cambio.
+
+---
+
+## Paso 5: Verificar que Winget quedó instalado
+
+Una vez ejecutado el script, comprueba que winget funcione correctamente:
+
+```powershell
+winget --version
+```
+
+Si devuelve un número de versión (ej. `v1.x.x.x`), la instalación fue exitosa.
+
+---
+
+## Notas
+
+- Si el `Paso 5` falla, puede tratarse de un problema de permisos en `C:\Program Files\WindowsApps`. En ese caso, ejecuta:
+```powershell
+  TAKEOWN /F "C:\Program Files\WindowsApps" /R /A /D Y
+  ICACLS "C:\Program Files\WindowsApps" /grant Administrators:F /T
+```
+- Windows Server 2019 no tiene soporte oficial de Microsoft para winget, por lo que este método (script de la comunidad) es la vía recomendada.

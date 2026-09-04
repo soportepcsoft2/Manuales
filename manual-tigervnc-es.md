@@ -50,6 +50,15 @@ alwaysshared
 ```
 
 Consulta la siguiente página del manual para más detalles: Xvnc(1).
+### Nota: cómo ubicar los archivos de configuración
+
+Si no encuentras estos archivos de configuración (vncserver.users, vncserver-config-defaults, vncserver-config-mandatory) o quieres saber en qué directorio exacto se instalaron en tu sistema, puedes listar todos los archivos del paquete que contiene el binario Xvnc:
+
+``` 
+$ sudo rpm -ql xorg-x11-Xvnc 
+```
+
+En SLES, el binario Xvnc y sus archivos asociados vienen en el paquete xorg-x11-Xvnc, mientras que los scripts auxiliares como vncserver y vncpasswd suelen venir en el paquete tigervnc. Este comando te mostrará la ruta completa de cada archivo instalado, incluyendo los archivos de configuración.
 
 ### Nota:
 

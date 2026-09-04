@@ -9,7 +9,7 @@ Este manual documenta paso a paso cómo instalar, configurar y dejar funcionando
 **¿Qué hace esto?** Instala el paquete que permite compartir el escritorio de Linux por red usando el protocolo VNC.
 
 ```bash
-sudo zypper install tigervnc-server tigervnc-server-module
+sudo sudo zypper install tigervnc xorg-x11-Xvnc
 ```
 
 En SUSE también puedes hacerlo desde una interfaz gráfica con **YaST > Software Management**.
